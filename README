@@ -1,0 +1,53 @@
+Authors:
+Tanay Vysyaraju: tv193
+Saroop Makhija: ssm229
+
+## 1. Requirements
+
+- Listen on a TCP port specified as first argument.
+- Implement RPSP protocol (messages P, W, B, M, R, C, Q) exactly as specified.
+- Support multiple concurrent games via `fork()`.
+- Maintain active-player list to prevent duplicate logins; send `R|L|Logged in||` on conflicts.
+- Handle client disconnects as forfeits (send `R|F|||`).
+- Send `W|1||` immediately after each valid `P|<name>||` handshake.
+- Report results correctly, allow rematches, and clean up connections.
+
+## 2. Test Plan
+
+We verified the server manually with the following scenarios:
+
+- **Win/Loss:** Alice (ROCK) beats Bob (SCISSORS), then rematch or quit.
+- **Draw:** Carol and Dave both play PAPER and quit.
+- **Forfeit:** Eve connects and immediately disconnects; Frank receives `R|F|||`.
+- **Duplicate Login:** Frank and Nitish currently are in a game. When another player tries to play with the name Frank, they will be given `R|L|Logged in||`.
+- **Concurrent Games:** Multiple pairs connect on separate ports; games run independently.
+
+
+## 3. Edge Cases & Fixes (We found these edge cases through manual testing)
+
+1. **Stale Waiting-Socket Cleanup (Rapid Reconnect):**
+   - Problem: If a client `Ctrl+C` before match, its socket lingered in the waiting queue, blocking fast re-login.
+   - Fix: Before each `accept()` we scan the waiting list on each socket; if closed or errored, we remove it and free its slot.
+
+2. **Ignored Invalid Messages:**
+   - Problem: Clients sometimes sent malformed or unexpected messages prior to proper handshake.
+   - Fix: In `read_message()`, we return `-1` for any non-terminating or unknown-prefix reads; in main we only register names on valid `P|...||`, ignoring/bouncing others so only well-formed messages advance state.
+
+3. **Immediate Wait Reply:**
+   - Problem: `W|1||` was sent only after two players connected, causing clients to hang.
+   - Fix: After parsing each `P|<name>||`, we immediately send `W|1||` before queueing, satisfying the protocol.
+
+4. **Duplicate-Name in Waiting Queue:**
+   - Problem: Two players in the same pending match could share a name, but only active list was checked, so duplicates slipped in.
+   - Fix: We extended `name_is_duplicate(...)` to check both the active list and the current waiting queue of names, preventing same-name pairings.
+
+5. **Forfeit During Moves:**
+   - Problem: A mid-game disconnect left the survivor waiting indefinitely.
+   - Fix: In `play_game()`, upon any `read_message()` <= 0, we immediately send `R|F|||`, close both sockets, and exit the child process, preventing deadlocks.
+
+6. **Child-Reaping & Active-List Maintenance:**
+   - Problem: Exited child processes kept their players marked active indefinitely.
+   - Fix: Installed a `SIGCHLD` handler (`reap_children`) to `waitpid(..., WNOHANG)` and purge by-PID entries from the active array as games finish.
+
+
+**Server handles concurrent games at the same time with fork()**
