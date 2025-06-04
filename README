@@ -2,6 +2,21 @@ Authors:
 Tanay Vysyaraju: tv193
 Saroop Makhija: ssm229
 
+**Overview**
+This project implements an online multiplayer Rock-Paper-Scissors game server called `rpsd`. Designed as part of CS 214: Systems Programming (Spring 2025), the server accepts incoming TCP connections from game clients, pairs players into matches, and facilitates real-time gameplay using a lightweight custom protocol.
+
+Once connected, the server matches players by name, manages gameplay interactions, evaluates outcomes, and supports rematches or graceful disconnects. The implementation ensures proper session tracking, move synchronization, and result reporting between players. Advanced features include support for concurrent games through process forking and connection state management to prevent duplicate logins or lost clients.
+
+The system showcases core concepts of systems-level programming, including:
+- TCP socket programming
+- Process management using `fork()`
+- Custom protocol design
+- Robust I/O handling
+- Real-time multiplayer game logic
+
+This project highlights a real-world application of low-level networking, inter-process communication, and scalable server architecture in a competitive and interactive environment.
+
+
 ## 1. Requirements
 
 - Listen on a TCP port specified as first argument.
