@@ -1,68 +1,94 @@
-Authors:
-Tanay Vysyaraju: tv193
-Saroop Makhija: ssm229
+# 🪨✂️📄 Rock-Paper-Scissors Daemon (`rpsd`)
+**CS 214: Systems Programming – Spring 2025**
 
-**Overview**
-This project implements an online multiplayer Rock-Paper-Scissors game server called `rpsd`. Designed as part of CS 214: Systems Programming (Spring 2025), the server accepts incoming TCP connections from game clients, pairs players into matches, and facilitates real-time gameplay using a lightweight custom protocol.
+### Authors  
+- **Tanay Vysyaraju** — `tv193`  
+- **Saroop Makhija** — `ssm229`
 
-Once connected, the server matches players by name, manages gameplay interactions, evaluates outcomes, and supports rematches or graceful disconnects. The implementation ensures proper session tracking, move synchronization, and result reporting between players. Advanced features include support for concurrent games through process forking and connection state management to prevent duplicate logins or lost clients.
+---
 
-The system showcases core concepts of systems-level programming, including:
-- TCP socket programming
-- Process management using `fork()`
-- Custom protocol design
-- Robust I/O handling
-- Real-time multiplayer game logic
+## 📖 Overview
 
-This project highlights a real-world application of low-level networking, inter-process communication, and scalable server architecture in a competitive and interactive environment.
+This project implements an online multiplayer **Rock-Paper-Scissors game server** called `rpsd`. Designed as part of **CS 214: Systems Programming**, the server accepts incoming TCP connections, pairs clients into matches, and manages real-time gameplay via a custom-designed protocol.
 
+Key features include:
+- TCP socket handling  
+- Forked process management  
+- Real-time multiplayer logic  
+- Robust I/O and session control  
+- Duplicate login protection  
+- Fault-tolerant matchmaking
 
-## 1. Requirements
+The server ensures gameplay reliability through precise synchronization, rematch support, and concurrent session handling using `fork()` for scalable architecture. It also prevents duplicate player names and handles premature disconnects as forfeits, ensuring fair and fluid multiplayer experiences.
 
-- Listen on a TCP port specified as first argument.
-- Implement RPSP protocol (messages P, W, B, M, R, C, Q) exactly as specified.
-- Support multiple concurrent games via `fork()`.
-- Maintain active-player list to prevent duplicate logins; send `R|L|Logged in||` on conflicts.
-- Handle client disconnects as forfeits (send `R|F|||`).
-- Send `W|1||` immediately after each valid `P|<name>||` handshake.
-- Report results correctly, allow rematches, and clean up connections.
+---
 
-## 2. Test Plan
+## ✅ Requirements
 
-We verified the server manually with the following scenarios:
+- Accept TCP connections on a port specified via command-line argument.
+- Fully implement **RPSP protocol** (`P`, `W`, `B`, `M`, `R`, `C`, `Q`) with exact formatting.
+- Handle **multiple concurrent games** using `fork()`.
+- Prevent **duplicate logins** using an active-player list (send `R|L|Logged in||`).
+- Treat client disconnects as **automatic forfeits** (`R|F|||`).
+- After a valid `P|<name>||`, respond immediately with `W|1||`.
+- Ensure accurate result messaging, rematch flow, and cleanup.
 
-- **Win/Loss:** Alice (ROCK) beats Bob (SCISSORS), then rematch or quit.
-- **Draw:** Carol and Dave both play PAPER and quit.
-- **Forfeit:** Eve connects and immediately disconnects; Frank receives `R|F|||`.
-- **Duplicate Login:** Frank and Nitish currently are in a game. When another player tries to play with the name Frank, they will be given `R|L|Logged in||`.
-- **Concurrent Games:** Multiple pairs connect on separate ports; games run independently.
+---
 
+## 🧪 Test Plan
 
-## 3. Edge Cases & Fixes (We found these edge cases through manual testing)
+Manual verification was performed across the following key scenarios:
 
-1. **Stale Waiting-Socket Cleanup (Rapid Reconnect):**
-   - Problem: If a client `Ctrl+C` before match, its socket lingered in the waiting queue, blocking fast re-login.
-   - Fix: Before each `accept()` we scan the waiting list on each socket; if closed or errored, we remove it and free its slot.
+- **Win/Loss Case**  
+  `Alice (ROCK)` defeats `Bob (SCISSORS)` → result reported → rematch or quit.
 
-2. **Ignored Invalid Messages:**
-   - Problem: Clients sometimes sent malformed or unexpected messages prior to proper handshake.
-   - Fix: In `read_message()`, we return `-1` for any non-terminating or unknown-prefix reads; in main we only register names on valid `P|...||`, ignoring/bouncing others so only well-formed messages advance state.
+- **Draw**  
+  `Carol` and `Dave` both play PAPER → receive `R|D|||`.
 
-3. **Immediate Wait Reply:**
-   - Problem: `W|1||` was sent only after two players connected, causing clients to hang.
-   - Fix: After parsing each `P|<name>||`, we immediately send `W|1||` before queueing, satisfying the protocol.
+- **Forfeit Handling**  
+  `Eve` connects and disconnects immediately → opponent (`Frank`) receives `R|F|||`.
 
-4. **Duplicate-Name in Waiting Queue:**
-   - Problem: Two players in the same pending match could share a name, but only active list was checked, so duplicates slipped in.
-   - Fix: We extended `name_is_duplicate(...)` to check both the active list and the current waiting queue of names, preventing same-name pairings.
+- **Duplicate Login**  
+  If `Frank` is in a match, another client using `"Frank"` gets `R|L|Logged in||`.
 
-5. **Forfeit During Moves:**
-   - Problem: A mid-game disconnect left the survivor waiting indefinitely.
-   - Fix: In `play_game()`, upon any `read_message()` <= 0, we immediately send `R|F|||`, close both sockets, and exit the child process, preventing deadlocks.
+- **Concurrent Games**  
+  Multiple pairs run matches independently, each forked into separate processes.
 
-6. **Child-Reaping & Active-List Maintenance:**
-   - Problem: Exited child processes kept their players marked active indefinitely.
-   - Fix: Installed a `SIGCHLD` handler (`reap_children`) to `waitpid(..., WNOHANG)` and purge by-PID entries from the active array as games finish.
+---
 
+## ⚙️ Edge Cases & Fixes
 
-**Server handles concurrent games at the same time with fork()**
+> These issues were discovered and resolved through extensive manual testing:
+
+1. **🧼 Stale Waiting Socket Cleanup (Rapid Reconnect)**  
+   - **Issue**: `Ctrl+C` before matchmaking left stale sockets.  
+   - **Fix**: On each `accept()`, we now purge any closed/error sockets from the waiting queue.
+
+2. **🚫 Ignored Invalid Messages**  
+   - **Issue**: Malformed messages broke state advancement.  
+   - **Fix**: `read_message()` returns `-1` for bad inputs. We accept only valid `P|<name>||` for state progression.
+
+3. **⚡ Immediate Wait Reply**  
+   - **Issue**: Clients hung without `W|1||` after handshake.  
+   - **Fix**: Send `W|1||` immediately after valid name receipt.
+
+4. **🪪 Duplicate Name in Waiting Queue**  
+   - **Issue**: Duplicate names bypassed checks if in waiting state.  
+   - **Fix**: `name_is_duplicate()` now also checks the waiting list in addition to active list.
+
+5. **💀 Forfeit During Moves**  
+   - **Issue**: Mid-game disconnects caused indefinite wait.  
+   - **Fix**: If `read_message()` fails, `R|F|||` is sent and sockets are closed.
+
+6. **🧼 Child Process Cleanup & Active List Reaping**  
+   - **Issue**: Finished child processes weren’t removed from active players.  
+   - **Fix**: `SIGCHLD` handler `reap_children()` uses `waitpid(..., WNOHANG)` to clear PIDs and active records.
+
+---
+
+## 🧵 Concurrency Note
+
+**The server handles multiple concurrent games using `fork()`**, allowing completely independent matches to run simultaneously with isolated state.
+
+---
+
