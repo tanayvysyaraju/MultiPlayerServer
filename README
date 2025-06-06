@@ -1,4 +1,4 @@
-# RPSD: Multiplayer Rock-Paper-Scissors Daemon
+# RPSD: Multiplayer Rock-Paper-Scissors Server
 
 `rpsd` is a TCP-based multiplayer Rock-Paper-Scissors game server developed for **CS 214: Systems Programming – Spring 2025**. It accepts incoming connections, pairs clients into matches, and manages real-time gameplay using a custom protocol over forked processes.
 
