@@ -108,7 +108,3 @@ make
 ```bash
 ./rpsd 12345
 ```
-
----
-
-Let me know if you’d like a diagram or Docker setup for cross-machine testing.
