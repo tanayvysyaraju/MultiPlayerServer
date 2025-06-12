@@ -1,7 +1,3 @@
-Thanks for clarifying! Below is your **`rpsd` (Rock-Paper-Scissors Daemon)** project reformatted in the same clean and structured style as the `PathPlan` README:
-
----
-
 # RPSD: Multiplayer Rock-Paper-Scissors Server
 
 **RPSD** is a systems-level multiplayer Rock-Paper-Scissors server that pairs players via TCP sockets and manages real-time games using a custom protocol and UNIX process forking. Built in C for CS 214: Systems Programming at Rutgers, it simulates scalable networked gameplay with concurrent client handling.
