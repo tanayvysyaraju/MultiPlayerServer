@@ -1,92 +1,89 @@
+Thanks for clarifying! Below is your **`rpsd` (Rock-Paper-Scissors Daemon)** project reformatted in the same clean and structured style as the `PathPlan` README:
+
+---
+
 # RPSD: Multiplayer Rock-Paper-Scissors Server
 
-`rpsd` is a TCP-based multiplayer Rock-Paper-Scissors game server developed for **CS 214: Systems Programming – Spring 2025**. It accepts incoming connections, pairs clients into matches, and manages real-time gameplay using a custom protocol over forked processes.
+**RPSD** is a systems-level multiplayer Rock-Paper-Scissors server that pairs players via TCP sockets and manages real-time games using a custom protocol and UNIX process forking. Built in C for CS 214: Systems Programming at Rutgers, it simulates scalable networked gameplay with concurrent client handling.
 
 ---
 
 ## Project Motivation
 
-Project managers (in this case, system programmers) face challenges such as:
+Systems programmers often face:
 
-* Managing concurrent client sessions
-* Ensuring reliable, fault-tolerant networking
-* Preventing user duplication and enforcing fairness
+* Concurrency and socket complexity in C
+* Handling real-time client state
+* Robust error and edge case management
 
-`rpsd` addresses these challenges through:
+**RPSD** tackles these by:
 
-* Custom multiplayer protocol handling (`RPSP`)
-* Scalable process isolation with `fork()`
-* Defensive programming around edge cases
+* Using process isolation for match handling
+* Designing a state-aware multiplayer protocol
+* Handling disconnects, duplicate logins, and rematches cleanly
 
 ---
 
 ## Features
 
-* **TCP Socket Handling**
+* **TCP Socket Management**
 
-  * Accepts client connections via command-line-defined port
-  * Reads, parses, and responds to protocol messages in real time
+  * Listens on a custom port via `bind()` and `listen()`
+  * Accepts multiple clients via `accept()`
 
-* **RPSP Protocol Support**
+* **Custom Protocol (RPSP)**
 
-  * Implements all message types: `P`, `W`, `B`, `M`, `R`, `C`, `Q`
-  * Exact formatting required for each message
+  * Message types: `P` (Play), `W` (Wait), `B` (Begin), `M` (Move), `R` (Result), `C` (Continue), `Q` (Quit)
+  * Enforces strict message formatting and parsing
 
-* **Concurrency & Forking**
+* **Process Forking**
 
-  * Each match handled in a separate process via `fork()`
-  * Fully isolated sessions for scalability and reliability
+  * Each match runs in an isolated process via `fork()`
+  * Parent handles matchmaking and child handles gameplay
 
-* **Robust Session Control**
+* **Player State Tracking**
 
-  * Tracks active/waiting players
-  * Prevents duplicate logins
-  * Handles disconnects as forfeits
+  * Prevents duplicate usernames across sessions
+  * Detects disconnects and sends forfeits
+  * Supports rematch logic and state cleanup
 
-* **Rematch Support**
+* **Robust Error Handling**
 
-  * Rematch requests and quit flows supported post-match
-  * Proper cleanup of sockets and player state
+  * Invalid messages are dropped and logged
+  * `SIGCHLD` used to reap zombie processes
+  * Dead sockets removed from active/waiting lists
+
+---
+
+## Concurrency Architecture
+
+RPSD uses **process-based concurrency**:
+
+```bash
+Main server (parent)
+│
+├── accept() → add to waiting queue
+│
+├── pair players → fork()
+│   └── child handles individual match
+│       └── RPSP messages processed in loop
+│
+└── SIGCHLD handler reaps finished games
+```
 
 ---
 
 ## Test Plan
 
-Manual verification was performed across the following key scenarios:
+All features were verified through manual testing:
 
-* **Win/Loss Case**
-  `Alice (ROCK)` defeats `Bob (SCISSORS)` → result reported → rematch or quit.
-
-* **Draw**
-  `Carol` and `Dave` both play PAPER → receive `R|D|||`.
-
-* **Forfeit Handling**
-  `Eve` connects and disconnects immediately → opponent (`Frank`) receives `R|F|||`.
-
-* **Duplicate Login**
-  If `Frank` is in a match, another client using `"Frank"` gets `R|L|Logged in||`.
-
-* **Concurrent Games**
-  Multiple pairs run matches independently, each forked into separate processes.
-
----
-
-## Edge Cases & Fixes
-
-| 🐞 Issue                                                                                            | 🔧 Fix                                                                                      |        |                     |          |                       |   |                                          |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------ | ------------------- | -------- | --------------------- | - | ---------------------------------------- |
-| **Stale Waiting Socket Cleanup (Rapid Reconnect)**<br>Ctrl+C before matchmaking left stale sockets. | On each `accept()`, purge any closed/error sockets from the waiting queue.                  |        |                     |          |                       |   |                                          |
-| **Ignored Invalid Messages**<br>Malformed messages broke state advancement.                         | `read_message()` returns `-1` for bad inputs. We accept only valid \`P                      | <name> |                     | \`.      |                       |   |                                          |
-| **Immediate Wait Reply**<br>Clients hung without \`W                                                | 1                                                                                           |        | \` after handshake. | Send \`W | 1                     |   | \` immediately after valid name receipt. |
-| **Duplicate Name in Waiting Queue**<br>Duplicate names bypassed checks if in waiting state.         | `name_is_duplicate()` now also checks the waiting list.                                     |        |                     |          |                       |   |                                          |
-| **Forfeit During Moves**<br>Mid-game disconnects caused indefinite wait.                            | If `read_message()` fails, send \`R                                                         | F      |                     |          | \` and close sockets. |   |                                          |
-| **Child Process Cleanup & Active List Reaping**<br>Finished child processes weren’t removed.        | `SIGCHLD` handler `reap_children()` uses `waitpid(..., WNOHANG)` to clear PIDs and records. |        |                     |          |                       |   |                                          |
-
----
-
-## Concurrency Note
-
-The server handles **multiple concurrent games using `fork()`**, allowing completely independent matches to run simultaneously with isolated state.
+| Scenario           | Description                                        |   |           |   |                        |
+| ------------------ | -------------------------------------------------- | - | --------- | - | ---------------------- |
+| Win/Loss Match     | Correct result sent after one player beats another |   |           |   |                        |
+| Draw Match         | Sends \`R                                          | D |           |   | \` on tie              |
+| Disconnect Forfeit | Sends \`R                                          | F |           |   | \` to remaining player |
+| Duplicate Login    | Duplicate name blocked with \`R                    | L | Logged in |   | \`                     |
+| Concurrent Matches | Multiple forks allow isolated matches in parallel  |   |           |   |                        |
 
 ---
 
@@ -94,11 +91,11 @@ The server handles **multiple concurrent games using `fork()`**, allowing comple
 
 ### Prerequisites
 
-* C compiler (e.g., `gcc`)
-* POSIX-compliant system (Linux/macOS)
-* Terminal for TCP client testing (e.g., `telnet`, `nc`)
+* POSIX-compatible OS (macOS, Linux)
+* `gcc` or any standard C compiler
+* Terminal client (`telnet`, `nc`) for testing
 
-### Compile
+### Build
 
 ```bash
 make
@@ -110,8 +107,12 @@ make
 ./rpsd <port>
 ```
 
-Example:
+**Example:**
 
 ```bash
 ./rpsd 12345
 ```
+
+---
+
+Let me know if you’d like a diagram or Docker setup for cross-machine testing.
